@@ -6,10 +6,9 @@ import { Prisma } from "@prisma/client";
 
 export async function PUT(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    // Allow privileged server calls when a valid server key is present in headers
     const serverKey = request.headers.get("x-copilot-server-key");
     const expectedKey = process.env.COPILOTKIT_SERVER_KEY;
     let session = null;
@@ -33,8 +32,7 @@ export async function PUT(
       );
     }
 
-    let { id } = await params;
-    // If caller provided a numeric id like "1", treat it as the Nth post ordered by createdAt desc
+    let { id } = params;
     if (/^\d+$/.test(id)) {
       const idx = Math.max(1, parseInt(id, 10));
       const found = await prisma.post.findMany({
@@ -89,7 +87,7 @@ export async function PUT(
 
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     // allow privileged server calls
@@ -104,7 +102,7 @@ export async function DELETE(
       }
     }
 
-    let { id } = await params;
+    let { id } = params;
     if (/^\d+$/.test(id)) {
       const idx = Math.max(1, parseInt(id, 10));
       const found = await prisma.post.findMany({
@@ -166,10 +164,10 @@ export async function DELETE(
 // Get a single post by id
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    let { id } = await params;
+    let { id } = params;
     if (/^\d+$/.test(id)) {
       const idx = Math.max(1, parseInt(id, 10));
       const found = await prisma.post.findMany({

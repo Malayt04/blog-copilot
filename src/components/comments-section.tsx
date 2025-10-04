@@ -48,12 +48,19 @@ export default function CommentsSection({
         body: JSON.stringify({ content: newComment }),
       });
 
+      // Parse the response once and handle different error shapes returned by the server
+      const data = await response.json().catch(() => null);
+
       if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.message || "Failed to add comment");
+        const serverMessage =
+          data?.message ||
+          data?.error ||
+          (typeof data === "string" ? data : null) ||
+          `HTTP error! status: ${response.status}`;
+        throw new Error(serverMessage);
       }
 
-      const { comment } = await response.json();
+      const { comment } = data || {};
 
       // Add the new comment to the list
       setComments([comment, ...comments]);

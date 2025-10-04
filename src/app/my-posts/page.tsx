@@ -3,14 +3,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { Button } from "@/components/ui/button";
-import {
-  Edit3,
-  Trash2,
-  Plus,
-  Calendar,
-  MessageCircle,
-  Heart,
-} from "lucide-react";
+import { Edit3, Plus, Calendar, MessageCircle, Heart } from "lucide-react";
 import Link from "next/link";
 import DeletePostForm from "@/components/delete-post-form";
 
@@ -111,8 +104,8 @@ export default async function MyPostsPage() {
             </div>
             <h3 className="text-2xl font-semibold mb-4">No posts yet</h3>
             <p className="text-muted-foreground mb-8 max-w-md mx-auto">
-              You haven't created any posts yet. Start writing to share your
-              thoughts.
+              You haven&apos;t created any posts yet. Start writing to share
+              your thoughts.
             </p>
             <Link href="/create">
               <Button className="bg-primary hover:bg-primary/90 rounded-full px-8 py-3 font-medium shadow-lg">

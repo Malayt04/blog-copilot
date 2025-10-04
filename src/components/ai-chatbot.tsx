@@ -4,10 +4,46 @@ import { CopilotSidebar } from "@copilotkit/react-ui";
 import { useCopilotAction } from "@copilotkit/react-core";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
+import { captureVisibleText } from "@/lib/pageCapture";
 
 export function AIChatbot() {
   const router = useRouter();
-  const [isCreating, setIsCreating] = useState(false);
+  const [, setIsCreating] = useState(false);
+
+  // Helper: resolve a post id from either a provided id or a title
+  async function resolvePostId(
+    postId?: string,
+    postTitle?: string
+  ): Promise<string | null> {
+    // If caller already provided an id, return it as-is
+    if (postId) return postId;
+
+    if (!postTitle) return null;
+
+    try {
+      const resp = await fetch("/api/posts");
+      if (!resp.ok) return null;
+      const posts: Array<{ id: string; title?: string }> = await resp.json();
+      const titleNorm = postTitle.toLowerCase().trim();
+
+      // Try exact match first
+      const exact = posts.find(
+        (p) => (p.title || "").toLowerCase().trim() === titleNorm
+      );
+      if (exact) return exact.id;
+
+      // Fallback: substring match
+      const partial = posts.find((p) =>
+        (p.title || "").toLowerCase().includes(titleNorm)
+      );
+      if (partial) return partial.id;
+
+      return null;
+    } catch (error) {
+      console.error("resolvePostId: error", error);
+      return null;
+    }
+  }
 
   // Action to create a new blog post
   useCopilotAction({
@@ -77,16 +113,21 @@ export function AIChatbot() {
         const response = await fetch("/api/posts");
         if (response.ok) {
           console.debug("AIChatbot.getBlogPosts: response ok");
-          const posts = await response.json();
+          const posts: Array<{
+            id: string;
+            title: string;
+            createdAt: string;
+            author?: { name?: string | null; email?: string };
+          }> = await response.json();
           if (posts.length === 0) {
             return "No blog posts found. You can create a new one by asking me to create a blog post.";
           }
 
           const postsList = posts
             .map(
-              (post: any, index: number) =>
+              (post, index) =>
                 `${index + 1}. **${post.title}** by ${
-                  post.author.name || post.author.email
+                  post.author?.name || post.author?.email
                 } (${new Date(post.createdAt).toLocaleDateString()})`
             )
             .join("\n");
@@ -110,14 +151,26 @@ export function AIChatbot() {
       {
         name: "postId",
         type: "string",
-        description: "The ID of the blog post",
-        required: true,
+        description:
+          "The ID of the blog post (optional if postTitle is provided)",
+        required: false,
+      },
+      {
+        name: "postTitle",
+        type: "string",
+        description: "The title of the blog post to look up (optional)",
+        required: false,
       },
     ],
-    handler: async ({ postId }) => {
+    handler: async ({ postId, postTitle }) => {
       try {
-        console.debug("AIChatbot.getBlogPost: fetching", postId);
-        const response = await fetch(`/api/posts/${postId}`);
+        const resolvedId = await resolvePostId(
+          postId as string | undefined,
+          postTitle as string | undefined
+        );
+        if (!resolvedId) return "Post not found by title or id.";
+        console.debug("AIChatbot.getBlogPost: fetching", resolvedId);
+        const response = await fetch(`/api/posts/${resolvedId}`);
         if (response.ok) {
           const { post } = await response.json();
           return `Title: ${post.title}\nAuthor: ${
@@ -144,8 +197,14 @@ export function AIChatbot() {
       {
         name: "postId",
         type: "string",
-        description: "The ID of the blog post to update",
-        required: true,
+        description: "The ID of the blog post to update (or provide postTitle)",
+        required: false,
+      },
+      {
+        name: "postTitle",
+        type: "string",
+        description: "The title of the blog post to update (will be resolved)",
+        required: false,
       },
       {
         name: "title",
@@ -160,10 +219,19 @@ export function AIChatbot() {
         required: false,
       },
     ],
-    handler: async ({ postId, title, content }) => {
+    handler: async ({ postId, postTitle, title, content }) => {
       try {
-        console.debug("AIChatbot.updateBlogPost:", { postId, title, content });
-        const updateData: any = {};
+        const resolvedId = await resolvePostId(
+          postId as string | undefined,
+          postTitle as string | undefined
+        );
+        if (!resolvedId) return "Post not found by title or id.";
+        console.debug("AIChatbot.updateBlogPost:", {
+          postId: resolvedId,
+          title,
+          content,
+        });
+        const updateData: Partial<{ title: string; content: string }> = {};
         if (title) updateData.title = title.trim();
         if (content) updateData.content = content.trim();
 
@@ -171,7 +239,7 @@ export function AIChatbot() {
           return "No changes provided. Please specify either a new title or content.";
         }
 
-        const response = await fetch(`/api/posts/${postId}`, {
+        const response = await fetch(`/api/posts/${resolvedId}`, {
           method: "PUT",
           headers: {
             "Content-Type": "application/json",
@@ -202,14 +270,25 @@ export function AIChatbot() {
       {
         name: "postId",
         type: "string",
-        description: "The ID of the blog post to delete",
-        required: true,
+        description: "The ID of the blog post to delete (or provide postTitle)",
+        required: false,
+      },
+      {
+        name: "postTitle",
+        type: "string",
+        description: "The title of the blog post to delete (optional)",
+        required: false,
       },
     ],
-    handler: async ({ postId }) => {
+    handler: async ({ postId, postTitle }) => {
       try {
-        console.debug("AIChatbot.deleteBlogPost: deleting", postId);
-        const response = await fetch(`/api/posts/${postId}`, {
+        const resolvedId = await resolvePostId(
+          postId as string | undefined,
+          postTitle as string | undefined
+        );
+        if (!resolvedId) return "Post not found by title or id.";
+        console.debug("AIChatbot.deleteBlogPost: deleting", resolvedId);
+        const response = await fetch(`/api/posts/${resolvedId}`, {
           method: "DELETE",
         });
 
@@ -236,14 +315,26 @@ export function AIChatbot() {
       {
         name: "postId",
         type: "string",
-        description: "The ID of the blog post to like/unlike",
-        required: true,
+        description:
+          "The ID of the blog post to like/unlike (or provide postTitle)",
+        required: false,
+      },
+      {
+        name: "postTitle",
+        type: "string",
+        description: "The title of the blog post to like/unlike (optional)",
+        required: false,
       },
     ],
-    handler: async ({ postId }) => {
+    handler: async ({ postId, postTitle }) => {
       try {
-        console.debug("AIChatbot.toggleLike: toggling like for", postId);
-        const response = await fetch(`/api/posts/${postId}/like`, {
+        const resolvedId = await resolvePostId(
+          postId as string | undefined,
+          postTitle as string | undefined
+        );
+        if (!resolvedId) return "Post not found by title or id.";
+        console.debug("AIChatbot.toggleLike: toggling like for", resolvedId);
+        const response = await fetch(`/api/posts/${resolvedId}/like`, {
           method: "POST",
         });
 
@@ -270,14 +361,25 @@ export function AIChatbot() {
       {
         name: "postId",
         type: "string",
-        description: "The ID of the blog post",
-        required: true,
+        description: "The ID of the blog post (or provide postTitle)",
+        required: false,
+      },
+      {
+        name: "postTitle",
+        type: "string",
+        description: "The title of the blog post to check",
+        required: false,
       },
     ],
-    handler: async ({ postId }) => {
+    handler: async ({ postId, postTitle }) => {
       try {
-        console.debug("AIChatbot.getLikeCount: fetching for", postId);
-        const response = await fetch(`/api/posts/${postId}/like`);
+        const resolvedId = await resolvePostId(
+          postId as string | undefined,
+          postTitle as string | undefined
+        );
+        if (!resolvedId) return "Post not found by title or id.";
+        console.debug("AIChatbot.getLikeCount: fetching for", resolvedId);
+        const response = await fetch(`/api/posts/${resolvedId}/like`);
         if (response.ok) {
           console.debug("AIChatbot.getLikeCount: response ok");
           const json = await response.json();
@@ -303,22 +405,44 @@ export function AIChatbot() {
       {
         name: "postId",
         type: "string",
-        description: "The ID of the blog post",
-        required: true,
+        description: "The ID of the blog post (or provide postTitle)",
+        required: false,
+      },
+      {
+        name: "postTitle",
+        type: "string",
+        description: "The title of the blog post to fetch comments for",
+        required: false,
       },
     ],
-    handler: async ({ postId }) => {
+    handler: async ({ postId, postTitle }) => {
       try {
-        console.debug("AIChatbot.getComments: fetching for", postId);
-        const response = await fetch(`/api/posts/${postId}/comments`);
+        const resolvedId = await resolvePostId(
+          postId as string | undefined,
+          postTitle as string | undefined
+        );
+        if (!resolvedId) return "Post not found by title or id.";
+        console.debug("AIChatbot.getComments: fetching for", resolvedId);
+        const response = await fetch(`/api/posts/${resolvedId}/comments`);
         if (response.ok) {
           console.debug("AIChatbot.getComments: response ok");
-          const { comments } = await response.json();
+          const data: {
+            comments: {
+              user: { name?: string | null; email?: string };
+              content: string;
+            }[];
+          } = await response.json();
+          const { comments } = data;
           if (!comments || comments.length === 0) return "No comments found.";
           return comments
             .map(
-              (c: any, i: number) =>
-                `${i + 1}. ${c.user.name || c.user.email}: ${c.content}`
+              (
+                c: {
+                  user: { name?: string | null; email?: string };
+                  content: string;
+                },
+                i: number
+              ) => `${i + 1}. ${c.user.name || c.user.email}: ${c.content}`
             )
             .join("\n");
         } else {
@@ -339,8 +463,14 @@ export function AIChatbot() {
       {
         name: "postId",
         type: "string",
-        required: true,
-        description: "Post ID",
+        required: false,
+        description: "Post ID (or provide postTitle)",
+      },
+      {
+        name: "postTitle",
+        type: "string",
+        required: false,
+        description: "Post title to resolve the ID",
       },
       {
         name: "content",
@@ -349,10 +479,18 @@ export function AIChatbot() {
         description: "Comment content",
       },
     ],
-    handler: async ({ postId, content }) => {
+    handler: async ({ postId, postTitle, content }) => {
       try {
-        console.debug("AIChatbot.createComment: posting", { postId, content });
-        const response = await fetch(`/api/posts/${postId}/comments`, {
+        const resolvedId = await resolvePostId(
+          postId as string | undefined,
+          postTitle as string | undefined
+        );
+        if (!resolvedId) return "Post not found by title or id.";
+        console.debug("AIChatbot.createComment: posting", {
+          postId: resolvedId,
+          content,
+        });
+        const response = await fetch(`/api/posts/${resolvedId}/comments`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ content }),
@@ -406,6 +544,31 @@ export function AIChatbot() {
     },
   });
 
+  // Action to read visible page text if user consented
+  useCopilotAction({
+    name: "readVisiblePage",
+    description:
+      "Read the visible textual content of the current page and return a preview",
+    parameters: [],
+    handler: async () => {
+      try {
+        // In this personal app, always capture visible text from the page
+        const text = captureVisibleText({ maxChars: 10000 });
+        if (!text || text.trim().length === 0) {
+          return "I couldn't find any visible text on this page.";
+        }
+
+        // Provide a short summary to avoid overwhelming the assistant UI. The MCP/assistant can ask to see more.
+        const preview =
+          text.length > 2000 ? text.slice(0, 2000) + "\n\n[truncated]" : text;
+        return `Here is the visible page text (truncated if large):\n\n${preview}`;
+      } catch (error) {
+        console.error("AIChatbot.readVisiblePage: error", error);
+        return `Error reading page: ${error}`;
+      }
+    },
+  });
+
   return (
     <CopilotSidebar
       instructions="You are an AI assistant for a blog application. You can help users create, read, update, and delete blog posts. You have access to the following actions:
@@ -414,6 +577,16 @@ export function AIChatbot() {
       2. **getBlogPosts** - Get all blog posts with their details
       3. **updateBlogPost** - Update an existing blog post by ID
       4. **deleteBlogPost** - Delete a blog post by ID
+      5. **createComment** - Create a comment on a blog post
+      6. **readVisiblePage** - Read the visible page text
+      7. **getComments** - Get all comments for a blog post
+      8. **registerUser** - Register a new user
+      
+      When creating blog posts, always use markdown formatting for the content. You can include headers, bold text, italic text, code blocks, lists, links, and more.
+      
+      When updating blog posts, always use markdown formatting for the content. You can include headers, bold text, italic text, code blocks, lists, links, and more.
+      
+      When deleting blog posts, always use markdown formatting for the content. You can include headers, bold text, italic text, code blocks, lists, links, and more.
       
       When creating blog posts, always use markdown formatting for the content. You can include headers, bold text, italic text, code blocks, lists, links, and more.
       

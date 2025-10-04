@@ -10,13 +10,15 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Moon, Sun, User, LogOut, Plus, Bot } from "lucide-react";
+import { Moon, Sun, User, LogOut, Plus } from "lucide-react";
 import { useTheme } from "next-themes";
 import { AIChatbot } from "@/components/ai-chatbot";
+// react hooks removed as they're not needed here
 
 export function Navbar() {
   const { data: session } = useSession();
   const { theme, setTheme } = useTheme();
+  // Screen consent state intentionally removed for personal-app always-on access
 
   return (
     <>
@@ -44,9 +46,7 @@ export function Navbar() {
               {session ? (
                 <div className="flex items-center space-x-4">
                   <Link href="/my-posts">
-                    <Button variant="ghost">
-                      My Posts
-                    </Button>
+                    <Button variant="ghost">My Posts</Button>
                   </Link>
                   <Link href="/create">
                     <Button className="bg-primary text-primary-foreground hover:bg-primary/90 rounded-full px-6 py-2 font-medium transition-all duration-200 shadow-lg hover:shadow-xl">
@@ -54,6 +54,8 @@ export function Navbar() {
                       Write
                     </Button>
                   </Link>
+
+                  {/* Screen access is intentionally always allowed in this personal app; removed consent toggle */}
 
                   <DropdownMenu>
                     <DropdownMenuTrigger asChild>

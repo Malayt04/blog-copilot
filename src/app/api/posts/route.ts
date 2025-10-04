@@ -50,6 +50,18 @@ export async function POST(request: NextRequest) {
     type AuthUser = { id?: string } & Record<string, unknown>;
     const userId = (session.user as AuthUser).id as string;
 
+    // Verify if user exists in the database
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+    });
+
+    if (!user) {
+      return NextResponse.json(
+        { message: "User not found" },
+        { status: 404 }
+      );
+    }
+
     const post = await prisma.post.create({
       data: {
         title,

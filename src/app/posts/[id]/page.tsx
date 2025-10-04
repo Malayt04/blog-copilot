@@ -1,15 +1,7 @@
 import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { Button } from "@/components/ui/button";
-import {
-  Calendar,
-  User,
-  ArrowLeft,
-  Edit,
-  Trash2,
-  Heart,
-  MessageCircle,
-} from "lucide-react";
+import { Calendar, ArrowLeft, Edit, Heart, MessageCircle } from "lucide-react";
 import Link from "next/link";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
@@ -41,8 +33,14 @@ async function getPostStats(postId: string, userId?: string) {
   // Defensive access: prisma client may not expose relation property names in some runtime
   // configurations, so guard access to avoid `cannot read properties of undefined` runtime errors.
   type CountFn = (args: { where: { postId: string } }) => Promise<number>;
+  type LikeFindUniqueArgs = {
+    where: { userId_postId: { userId: string; postId: string } };
+  };
   const client = prisma as unknown as {
-    like?: { count: CountFn; findUnique?: (args: any) => Promise<any> };
+    like?: {
+      count: CountFn;
+      findUnique?: (args: LikeFindUniqueArgs) => Promise<unknown>;
+    };
     comment?: { count: CountFn };
   };
 
@@ -109,14 +107,15 @@ export default async function PostPage({ params }: { params: { id: string } }) {
     notFound();
   }
 
+  type AuthUser = { id?: string } & Record<string, unknown>;
   const { likeCount, isLikedByCurrentUser, commentCount } = await getPostStats(
     params.id,
-    session?.user?.id
+    (session?.user as AuthUser)?.id
   );
 
   const comments = await getComments(params.id);
 
-  const isAuthor = session?.user?.id === post.author.id;
+  const isAuthor = (session?.user as AuthUser)?.id === post.author.id;
 
   return (
     <div className="min-h-screen bg-background">
