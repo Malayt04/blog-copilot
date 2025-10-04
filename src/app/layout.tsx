@@ -32,7 +32,9 @@ export default function RootLayout({
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
       >
-        <CopilotKit publicApiKey={process.env.NEXT_COPILOTKIT_PUBLIC_KEY}>
+        <CopilotKit
+          publicApiKey={process.env.NEXT_PUBLIC_COPILOTKIT_PUBLIC_KEY}
+        >
           <Providers>
             <div className="min-h-screen bg-background">
               <ConditionalNavbar />

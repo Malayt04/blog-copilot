@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useRef } from "react";
+import { useState } from "react";
+import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { MessageCircle, Send } from "lucide-react";
@@ -21,20 +22,23 @@ interface CommentsSectionProps {
   initialComments: Comment[];
 }
 
-export default function CommentsSection({ postId, initialComments }: CommentsSectionProps) {
+export default function CommentsSection({
+  postId,
+  initialComments,
+}: CommentsSectionProps) {
   const [comments, setComments] = useState<Comment[]>(initialComments);
   const [newComment, setNewComment] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const { data: session } = useSession();
-  const commentInputRef = useRef<HTMLTextAreaElement>(null);
+  // ...existing code...
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
+
     if (!newComment.trim() || !session) return;
-    
+
     setIsSubmitting(true);
-    
+
     try {
       const response = await fetch(`/api/posts/${postId}/comments`, {
         method: "POST",
@@ -43,14 +47,14 @@ export default function CommentsSection({ postId, initialComments }: CommentsSec
         },
         body: JSON.stringify({ content: newComment }),
       });
-      
+
       if (!response.ok) {
         const error = await response.json();
         throw new Error(error.message || "Failed to add comment");
       }
-      
+
       const { comment } = await response.json();
-      
+
       // Add the new comment to the list
       setComments([comment, ...comments]);
       setNewComment("");
@@ -68,7 +72,7 @@ export default function CommentsSection({ postId, initialComments }: CommentsSec
         <MessageCircle className="h-5 w-5" />
         Comments ({comments.length})
       </h3>
-      
+
       {session ? (
         <form onSubmit={handleSubmit} className="mb-8">
           <div className="flex gap-2">
@@ -78,8 +82,8 @@ export default function CommentsSection({ postId, initialComments }: CommentsSec
               placeholder="Write a comment..."
               className="flex-1"
             />
-            <Button 
-              type="submit" 
+            <Button
+              type="submit"
               disabled={isSubmitting || !newComment.trim()}
               className="rounded-full px-4"
             >
@@ -91,24 +95,32 @@ export default function CommentsSection({ postId, initialComments }: CommentsSec
         <p className="text-muted-foreground mb-8">
           <Link href="/auth/signin" className="text-primary hover:underline">
             Sign in
-          </Link> to leave a comment
+          </Link>{" "}
+          to leave a comment
         </p>
       )}
-      
+
       <div className="space-y-6">
         {comments.length === 0 ? (
-          <p className="text-muted-foreground text-center py-4">No comments yet. Be the first to comment!</p>
+          <p className="text-muted-foreground text-center py-4">
+            No comments yet. Be the first to comment!
+          </p>
         ) : (
           comments.map((comment) => (
-            <div key={comment.id} className="border-b border-border/30 pb-6 last:border-b-0">
+            <div
+              key={comment.id}
+              className="border-b border-border/30 pb-6 last:border-b-0"
+            >
               <div className="flex items-start gap-3">
                 <div className="w-10 h-10 rounded-full bg-gradient-to-r from-primary to-primary/70 flex items-center justify-center text-primary-foreground font-medium flex-shrink-0">
-                  {(comment.user.name || comment.user.email).charAt(0).toUpperCase()}
+                  {(comment.user.name || comment.user.email)
+                    .charAt(0)
+                    .toUpperCase()}
                 </div>
                 <div className="flex-1">
                   <div className="flex items-center gap-2 mb-1">
                     <span className="font-medium">
-                      {comment.user.name || comment.user.email.split('@')[0]}
+                      {comment.user.name || comment.user.email.split("@")[0]}
                     </span>
                     <span className="text-xs text-muted-foreground">
                       {new Date(comment.createdAt).toLocaleDateString("en-US", {

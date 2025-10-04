@@ -30,6 +30,10 @@ export function AIChatbot() {
     handler: async ({ title, content }) => {
       setIsCreating(true);
       try {
+        console.debug("AIChatbot.createBlogPost: sending request", {
+          title,
+          content,
+        });
         const response = await fetch("/api/posts", {
           method: "POST",
           headers: {
@@ -42,6 +46,7 @@ export function AIChatbot() {
         });
 
         if (response.ok) {
+          console.debug("AIChatbot.createBlogPost: response ok");
           const { post } = await response.json();
           router.push(`/posts/${post.id}`);
           return `Successfully created blog post "${title}". You can now view it at /posts/${post.id}`;
@@ -52,6 +57,7 @@ export function AIChatbot() {
           }`;
         }
       } catch (error) {
+        console.error("AIChatbot.createBlogPost: error", error);
         return `Error creating blog post: ${error}`;
       } finally {
         setIsCreating(false);
@@ -67,8 +73,10 @@ export function AIChatbot() {
     parameters: [],
     handler: async () => {
       try {
+        console.debug("AIChatbot.getBlogPosts: fetching /api/posts");
         const response = await fetch("/api/posts");
         if (response.ok) {
+          console.debug("AIChatbot.getBlogPosts: response ok");
           const posts = await response.json();
           if (posts.length === 0) {
             return "No blog posts found. You can create a new one by asking me to create a blog post.";
@@ -88,7 +96,42 @@ export function AIChatbot() {
           return "Failed to fetch blog posts.";
         }
       } catch (error) {
+        console.error("AIChatbot.getBlogPosts: error", error);
         return `Error fetching blog posts: ${error}`;
+      }
+    },
+  });
+
+  // Action to get a single blog post
+  useCopilotAction({
+    name: "getBlogPost",
+    description: "Get a single blog post by ID",
+    parameters: [
+      {
+        name: "postId",
+        type: "string",
+        description: "The ID of the blog post",
+        required: true,
+      },
+    ],
+    handler: async ({ postId }) => {
+      try {
+        console.debug("AIChatbot.getBlogPost: fetching", postId);
+        const response = await fetch(`/api/posts/${postId}`);
+        if (response.ok) {
+          const { post } = await response.json();
+          return `Title: ${post.title}\nAuthor: ${
+            post.author?.name || post.author?.email
+          }\nCreated: ${new Date(post.createdAt).toLocaleString()}\n\n${
+            post.content
+          }`;
+        } else {
+          const err = await response.json();
+          return `Failed to fetch post: ${err.error || "Unknown error"}`;
+        }
+      } catch (error) {
+        console.error("AIChatbot.getBlogPost: error", error);
+        return `Error fetching post: ${error}`;
       }
     },
   });
@@ -119,6 +162,7 @@ export function AIChatbot() {
     ],
     handler: async ({ postId, title, content }) => {
       try {
+        console.debug("AIChatbot.updateBlogPost:", { postId, title, content });
         const updateData: any = {};
         if (title) updateData.title = title.trim();
         if (content) updateData.content = content.trim();
@@ -144,6 +188,7 @@ export function AIChatbot() {
           }`;
         }
       } catch (error) {
+        console.error("AIChatbot.updateBlogPost: error", error);
         return `Error updating blog post: ${error}`;
       }
     },
@@ -163,6 +208,7 @@ export function AIChatbot() {
     ],
     handler: async ({ postId }) => {
       try {
+        console.debug("AIChatbot.deleteBlogPost: deleting", postId);
         const response = await fetch(`/api/posts/${postId}`, {
           method: "DELETE",
         });
@@ -176,6 +222,7 @@ export function AIChatbot() {
           }`;
         }
       } catch (error) {
+        console.error("AIChatbot.deleteBlogPost: error", error);
         return `Error deleting blog post: ${error}`;
       }
     },
@@ -195,6 +242,7 @@ export function AIChatbot() {
     ],
     handler: async ({ postId }) => {
       try {
+        console.debug("AIChatbot.toggleLike: toggling like for", postId);
         const response = await fetch(`/api/posts/${postId}/like`, {
           method: "POST",
         });
@@ -207,6 +255,7 @@ export function AIChatbot() {
           return `Failed to toggle like: ${error.message || "Unknown error"}`;
         }
       } catch (error) {
+        console.error("AIChatbot.toggleLike: error", error);
         return `Error toggling like: ${error}`;
       }
     },
@@ -227,8 +276,10 @@ export function AIChatbot() {
     ],
     handler: async ({ postId }) => {
       try {
+        console.debug("AIChatbot.getLikeCount: fetching for", postId);
         const response = await fetch(`/api/posts/${postId}/like`);
         if (response.ok) {
+          console.debug("AIChatbot.getLikeCount: response ok");
           const json = await response.json();
           return (
             `This post has ${json.likeCount} likes.` +
@@ -238,6 +289,7 @@ export function AIChatbot() {
           return "Failed to fetch like count.";
         }
       } catch (error) {
+        console.error("AIChatbot.getLikeCount: error", error);
         return `Error fetching like count: ${error}`;
       }
     },
@@ -257,8 +309,10 @@ export function AIChatbot() {
     ],
     handler: async ({ postId }) => {
       try {
+        console.debug("AIChatbot.getComments: fetching for", postId);
         const response = await fetch(`/api/posts/${postId}/comments`);
         if (response.ok) {
+          console.debug("AIChatbot.getComments: response ok");
           const { comments } = await response.json();
           if (!comments || comments.length === 0) return "No comments found.";
           return comments
@@ -271,6 +325,7 @@ export function AIChatbot() {
           return "Failed to fetch comments.";
         }
       } catch (error) {
+        console.error("AIChatbot.getComments: error", error);
         return `Error fetching comments: ${error}`;
       }
     },
@@ -296,6 +351,7 @@ export function AIChatbot() {
     ],
     handler: async ({ postId, content }) => {
       try {
+        console.debug("AIChatbot.createComment: posting", { postId, content });
         const response = await fetch(`/api/posts/${postId}/comments`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -311,6 +367,7 @@ export function AIChatbot() {
           }`;
         }
       } catch (error) {
+        console.error("AIChatbot.createComment: error", error);
         return `Error creating comment: ${error}`;
       }
     },
@@ -327,19 +384,23 @@ export function AIChatbot() {
     ],
     handler: async ({ name, email, password }) => {
       try {
+        console.debug("AIChatbot.registerUser: registering", { email });
         const response = await fetch(`/api/auth/register`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ name, email, password }),
         });
         if (response.ok) {
+          console.debug("AIChatbot.registerUser: response ok");
           const json = await response.json();
           return json.message || "User registered successfully.";
         } else {
           const error = await response.json();
+          console.error("AIChatbot.registerUser: failed", error);
           return `Failed to register user: ${error.error || "Unknown error"}`;
         }
       } catch (error) {
+        console.error("AIChatbot.registerUser: error", error);
         return `Error registering user: ${error}`;
       }
     },
