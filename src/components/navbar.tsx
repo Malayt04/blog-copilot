@@ -43,6 +43,11 @@ export function Navbar() {
 
               {session ? (
                 <div className="flex items-center space-x-4">
+                  <Link href="/my-posts">
+                    <Button variant="ghost">
+                      My Posts
+                    </Button>
+                  </Link>
                   <Link href="/create">
                     <Button className="bg-primary text-primary-foreground hover:bg-primary/90 rounded-full px-6 py-2 font-medium transition-all duration-200 shadow-lg hover:shadow-xl">
                       <Plus className="h-4 w-4 mr-2" />
@@ -57,6 +62,10 @@ export function Navbar() {
                       </Button>
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="end">
+                      <DropdownMenuItem asChild>
+                        <Link href="/my-posts">My Posts</Link>
+                      </DropdownMenuItem>
+                      <DropdownMenuSeparator />
                       <DropdownMenuItem>
                         {session.user?.name || session.user?.email}
                       </DropdownMenuItem>

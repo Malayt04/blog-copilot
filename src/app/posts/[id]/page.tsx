@@ -1,6 +1,5 @@
 import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import {
   Calendar,
@@ -17,6 +16,9 @@ import { authOptions } from "@/lib/auth";
 import { DeletePostButton } from "@/components/delete-post-button";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
+import LikeButton from "@/components/like-button";
+import ShareButton from "@/components/share-button";
+import CommentsSection from "@/components/comments-section";
 
 async function getPost(id: string) {
   const post = await prisma.post.findUnique({
@@ -35,6 +37,70 @@ async function getPost(id: string) {
   return post;
 }
 
+async function getPostStats(postId: string, userId?: string) {
+  // Defensive access: prisma client may not expose relation property names in some runtime
+  // configurations, so guard access to avoid `cannot read properties of undefined` runtime errors.
+  type CountFn = (args: { where: { postId: string } }) => Promise<number>;
+  const client = prisma as unknown as {
+    like?: { count: CountFn; findUnique?: (args: any) => Promise<any> };
+    comment?: { count: CountFn };
+  };
+
+  // Get like count
+  let likeCount = 0;
+  if (client.like && typeof client.like.count === "function") {
+    likeCount = await client.like.count({ where: { postId } });
+  }
+
+  // Check if current user liked the post
+  let isLikedByCurrentUser = false;
+  if (userId && client.like && typeof client.like.findUnique === "function") {
+    const userLike = await client.like.findUnique({
+      where: {
+        userId_postId: {
+          userId: userId,
+          postId: postId,
+        },
+      },
+    });
+
+    isLikedByCurrentUser = !!userLike;
+  }
+
+  // Get comment count
+  let commentCount = 0;
+  if (client.comment && typeof client.comment.count === "function") {
+    commentCount = await client.comment.count({ where: { postId } });
+  }
+
+  return { likeCount, isLikedByCurrentUser, commentCount };
+}
+
+async function getComments(postId: string) {
+  const comments = await prisma.comment.findMany({
+    where: {
+      postId: postId,
+    },
+    include: {
+      user: {
+        select: {
+          name: true,
+          email: true,
+        },
+      },
+    },
+    orderBy: {
+      createdAt: "desc",
+    },
+  });
+
+  // Format dates properly for client component
+  return comments.map((comment) => ({
+    ...comment,
+    createdAt: comment.createdAt,
+  }));
+}
+
 export default async function PostPage({ params }: { params: { id: string } }) {
   const post = await getPost(params.id);
   const session = await getServerSession(authOptions);
@@ -42,6 +108,13 @@ export default async function PostPage({ params }: { params: { id: string } }) {
   if (!post) {
     notFound();
   }
+
+  const { likeCount, isLikedByCurrentUser, commentCount } = await getPostStats(
+    params.id,
+    session?.user?.id
+  );
+
+  const comments = await getComments(params.id);
 
   const isAuthor = session?.user?.id === post.author.id;
 
@@ -134,11 +207,11 @@ export default async function PostPage({ params }: { params: { id: string } }) {
                 </span>
                 <span className="flex items-center gap-1">
                   <Heart className="w-4 h-4" />
-                  <span>24 likes</span>
+                  <span>{likeCount} likes</span>
                 </span>
                 <span className="flex items-center gap-1">
                   <MessageCircle className="w-4 h-4" />
-                  <span>8 comments</span>
+                  <span>{commentCount} comments</span>
                 </span>
               </div>
             </header>
@@ -253,33 +326,33 @@ export default async function PostPage({ params }: { params: { id: string } }) {
               </div>
 
               <div className="flex items-center gap-4">
-                <Button variant="outline" size="sm" className="rounded-full">
-                  <Heart className="h-4 w-4 mr-2" />
-                  Like
-                </Button>
-                <Button variant="outline" size="sm" className="rounded-full">
-                  <MessageCircle className="h-4 w-4 mr-2" />
-                  Comment
-                </Button>
-                <Button variant="outline" size="sm" className="rounded-full">
-                  <svg
-                    className="h-4 w-4 mr-2"
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={2}
-                      d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.367 2.684 3 3 0 00-5.367-2.684z"
-                    />
-                  </svg>
-                  Share
-                </Button>
+                <LikeButton
+                  postId={post.id}
+                  initialLikeCount={likeCount}
+                  initialIsLiked={isLikedByCurrentUser}
+                />
+                <Link href={`#comments`}>
+                  <Button variant="outline" size="sm" className="rounded-full">
+                    <MessageCircle className="h-4 w-4 mr-2" />
+                    Comment
+                  </Button>
+                </Link>
+                <ShareButton
+                  title={post.title}
+                  url={`${process.env.NEXT_PUBLIC_APP_URL}/posts/${post.id}`}
+                />
               </div>
             </div>
           </footer>
+
+          {/* Comments Section */}
+          <CommentsSection
+            postId={post.id}
+            initialComments={comments.map((comment) => ({
+              ...comment,
+              createdAt: comment.createdAt,
+            }))}
+          />
         </div>
       </div>
     </div>

@@ -1,44 +1,27 @@
-import { notFound, redirect } from "next/navigation";
+import { redirect } from "next/navigation";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { EditPostForm } from "@/components/edit-post-form";
+import { CreatePostForm } from "@/components/create-post-form";
 
-async function getPost(id: string) {
-  const post = await prisma.post.findUnique({
-    where: { id },
-    include: {
-      author: {
-        select: {
-          id: true,
-        },
-      },
-    },
-  });
-
-  return post;
-}
-
-export default async function EditPostPage({
-  params,
-}: {
-  params: { id: string };
-}) {
+export default async function EditPostPage({ params }: { params: { id: string } }) {
   const session = await getServerSession(authOptions);
 
   if (!session) {
     redirect("/auth/signin");
   }
 
-  const post = await getPost(params.id);
+  const post = await prisma.post.findUnique({
+    where: {
+      id: params.id,
+      authorId: session.user.id, // Ensure user can only edit their own posts
+    },
+  });
 
   if (!post) {
-    notFound();
+    redirect("/"); // Redirect if post doesn't exist or user doesn't have permission
   }
 
-  if (post.author.id !== session.user.id) {
-    redirect("/");
-  }
-
-  return <EditPostForm post={post} />;
+  // Pass the post data to the form
+  return <CreatePostForm initialPost={post} />;
 }

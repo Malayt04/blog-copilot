@@ -3,6 +3,7 @@ import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import { Providers } from "@/components/providers";
 import { ConditionalNavbar } from "@/components/conditional-navbar";
+import { AIChatbot } from "@/components/ai-chatbot";
 import { CopilotKit } from "@copilotkit/react-core";
 import "@copilotkit/react-ui/styles.css";
 
@@ -31,12 +32,11 @@ export default function RootLayout({
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
       >
-        <CopilotKit
-          publicApiKey={process.env.NEXT_COPILOTKIT_PUBLIC_KEY}
-        >
+        <CopilotKit publicApiKey={process.env.NEXT_COPILOTKIT_PUBLIC_KEY}>
           <Providers>
             <div className="min-h-screen bg-background">
               <ConditionalNavbar />
+              <AIChatbot />
               <main>{children}</main>
             </div>
           </Providers>

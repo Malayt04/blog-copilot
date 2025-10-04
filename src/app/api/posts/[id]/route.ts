@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { Prisma } from "@prisma/client";
 
 export async function PUT(
   request: NextRequest,
@@ -23,8 +24,10 @@ export async function PUT(
       );
     }
 
+    const { id } = await params;
+
     const post = await prisma.post.findUnique({
-      where: { id: params.id },
+      where: { id },
       select: { authorId: true },
     });
 
@@ -32,12 +35,15 @@ export async function PUT(
       return NextResponse.json({ error: "Post not found" }, { status: 404 });
     }
 
-    if (post.authorId !== session.user.id) {
+    type AuthUser = { id?: string } & Record<string, unknown>;
+    const userId = (session?.user as AuthUser)?.id as string | undefined;
+
+    if (post.authorId !== userId) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 
     const updatedPost = await prisma.post.update({
-      where: { id: params.id },
+      where: { id },
       data: {
         title,
         content,
@@ -65,8 +71,10 @@ export async function DELETE(
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
+    const { id } = await params;
+
     const post = await prisma.post.findUnique({
-      where: { id: params.id },
+      where: { id },
       select: { authorId: true },
     });
 
@@ -74,17 +82,32 @@ export async function DELETE(
       return NextResponse.json({ error: "Post not found" }, { status: 404 });
     }
 
-    if (post.authorId !== session.user.id) {
+    type AuthUser = { id?: string } & Record<string, unknown>;
+    const userId = (session?.user as AuthUser)?.id as string | undefined;
+
+    if (post.authorId !== userId) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 
     await prisma.post.delete({
-      where: { id: params.id },
+      where: { id },
     });
 
     return NextResponse.json({ success: true });
   } catch (error) {
     console.error("Error deleting post:", error);
+    
+    // Handle Prisma-specific errors (like foreign key constraint violations)
+    if (error instanceof Prisma.PrismaClientKnownRequestError) {
+      // P2003: Foreign key constraint error
+      if (error.code === 'P2003') {
+        return NextResponse.json(
+          { error: "Cannot delete post due to existing related records" },
+          { status: 400 }
+        );
+      }
+    }
+    
     return NextResponse.json(
       { error: "Internal server error" },
       { status: 500 }

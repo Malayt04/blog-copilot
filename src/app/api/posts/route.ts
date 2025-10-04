@@ -47,11 +47,14 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    type AuthUser = { id?: string } & Record<string, unknown>;
+    const userId = (session.user as AuthUser).id as string;
+
     const post = await prisma.post.create({
       data: {
         title,
         content,
-        authorId: session.user.id,
+        authorId: userId,
       },
     });
 

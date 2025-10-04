@@ -1,6 +1,8 @@
 import Link from "next/link";
+import { getServerSession } from "next-auth";
+import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { Calendar, User, Heart, MessageCircle } from "lucide-react";
+import { Calendar, Heart, MessageCircle, Plus } from "lucide-react";
 
 async function getPosts() {
   const posts = await prisma.post.findMany({
@@ -17,10 +19,44 @@ async function getPosts() {
     },
   });
 
-  return posts;
+  // Fetch counts for each post separately, guarding access in case prisma.like/comment
+  // are undefined at runtime (defensive -- avoids the "cannot read properties of undefined" error).
+  const postsWithCounts = await Promise.all(
+    posts.map(async (post) => {
+      type CountFn = (args: { where: { postId: string } }) => Promise<number>;
+      const client = prisma as unknown as {
+        like?: { count: CountFn };
+        comment?: { count: CountFn };
+      };
+
+      let likeCount = 0;
+      let commentCount = 0;
+
+      if (client.like) {
+        likeCount = await client.like.count({ where: { postId: post.id } });
+      }
+
+      if (client.comment) {
+        commentCount = await client.comment.count({
+          where: { postId: post.id },
+        });
+      }
+
+      return {
+        ...post,
+        _count: {
+          likes: likeCount,
+          comments: commentCount,
+        },
+      };
+    })
+  );
+
+  return postsWithCounts;
 }
 
 export default async function Home() {
+  const session = await getServerSession(authOptions);
   const posts = await getPosts();
 
   return (
@@ -30,23 +66,33 @@ export default async function Home() {
         <div className="container mx-auto px-4 py-16">
           <div className="max-w-4xl mx-auto text-center">
             <h1 className="text-5xl md:text-6xl font-bold mb-6 bg-gradient-to-r from-foreground to-foreground/70 bg-clip-text text-transparent">
-              Share Your Story
+              Discover Stories
             </h1>
             <p className="text-xl text-muted-foreground mb-8 max-w-2xl mx-auto leading-relaxed">
-              Write, publish, and share your thoughts with the world. Join our
-              community of writers and readers.
+              Explore insights, stories, and ideas from our community of writers
             </p>
             <div className="flex flex-col sm:flex-row gap-4 justify-center">
-              <Link href="/create">
-                <button className="bg-primary text-primary-foreground px-8 py-3 rounded-full font-medium hover:bg-primary/90 transition-all duration-200 shadow-lg hover:shadow-xl">
-                  Start Writing
-                </button>
-              </Link>
-              <Link href="#posts">
-                <button className="border border-border px-8 py-3 rounded-full font-medium hover:bg-muted transition-all duration-200">
-                  Explore Posts
-                </button>
-              </Link>
+              {session ? (
+                <>
+                  <Link href="/create">
+                    <button className="bg-primary text-primary-foreground px-8 py-3 rounded-full font-medium hover:bg-primary/90 transition-all duration-200 shadow-lg hover:shadow-xl">
+                      <Plus className="h-4 w-4 mr-2 inline" />
+                      Write Story
+                    </button>
+                  </Link>
+                  <Link href="/my-posts">
+                    <button className="border border-border px-8 py-3 rounded-full font-medium hover:bg-muted transition-all duration-200">
+                      My Stories
+                    </button>
+                  </Link>
+                </>
+              ) : (
+                <Link href="/auth/signin">
+                  <button className="bg-primary text-primary-foreground px-8 py-3 rounded-full font-medium hover:bg-primary/90 transition-all duration-200 shadow-lg hover:shadow-xl">
+                    Get Started
+                  </button>
+                </Link>
+              )}
             </div>
           </div>
         </div>
@@ -83,11 +129,19 @@ export default async function Home() {
               <p className="text-muted-foreground mb-8 max-w-md mx-auto">
                 Be the first to share your thoughts and start the conversation.
               </p>
-              <Link href="/create">
-                <button className="bg-primary text-primary-foreground px-8 py-3 rounded-full font-medium hover:bg-primary/90 transition-all duration-200 shadow-lg">
-                  Write your first story
-                </button>
-              </Link>
+              {session ? (
+                <Link href="/create">
+                  <button className="bg-primary text-primary-foreground px-8 py-3 rounded-full font-medium hover:bg-primary/90 transition-all duration-200 shadow-lg">
+                    Write your first story
+                  </button>
+                </Link>
+              ) : (
+                <Link href="/auth/signin">
+                  <button className="bg-primary text-primary-foreground px-8 py-3 rounded-full font-medium hover:bg-primary/90 transition-all duration-200 shadow-lg">
+                    Sign in to write
+                  </button>
+                </Link>
+              )}
             </div>
           ) : (
             <div className="space-y-8">
@@ -99,40 +153,48 @@ export default async function Home() {
                       <div className="flex items-center gap-3 text-sm text-muted-foreground mb-4">
                         <div className="flex items-center gap-2">
                           <div className="w-8 h-8 rounded-full bg-gradient-to-r from-primary to-primary/70 flex items-center justify-center text-primary-foreground text-sm font-medium">
-                            {(post.author.name || post.author.email)
-                              .charAt(0)
-                              .toUpperCase()}
+                            {post.author && (post.author.name || post.author.email)
+                              ? (post.author.name || post.author.email)
+                                  .charAt(0)
+                                  .toUpperCase()
+                              : 'A'}
                           </div>
                           <span className="font-medium">
-                            {post.author.name || post.author.email}
+                            {post.author && (post.author.name || post.author.email)
+                              ? (post.author.name || post.author.email)
+                              : 'Anonymous'}
                           </span>
                         </div>
                         <span>•</span>
                         <div className="flex items-center gap-1">
                           <Calendar className="h-4 w-4" />
                           <span>
-                            {new Date(post.createdAt).toLocaleDateString(
-                              "en-US",
-                              {
-                                year: "numeric",
-                                month: "long",
-                                day: "numeric",
-                              }
-                            )}
+                            {post.createdAt
+                              ? new Date(post.createdAt).toLocaleDateString(
+                                  "en-US",
+                                  {
+                                    year: "numeric",
+                                    month: "long",
+                                    day: "numeric",
+                                  }
+                                )
+                              : 'Unknown date'}
                           </span>
                         </div>
                       </div>
 
                       <Link href={`/posts/${post.id}`} className="group">
                         <h3 className="text-2xl md:text-3xl font-bold mb-4 group-hover:text-primary transition-colors duration-200 leading-tight">
-                          {post.title}
+                          {post.title || 'Untitled'}
                         </h3>
                         <p className="text-muted-foreground text-lg leading-relaxed line-clamp-3 mb-6">
-                          {post.content.length > 200
-                            ? `${post.content
-                                .substring(0, 200)
-                                .replace(/[#*`]/g, "")}...`
-                            : post.content.replace(/[#*`]/g, "")}
+                          {post.content
+                            ? (post.content.length > 200
+                                ? `${post.content
+                                    .substring(0, 200)
+                                    .replace(/[#*`]/g, "")}...`
+                                : post.content.replace(/[#*`]/g, ""))
+                            : 'No content'}
                         </p>
                       </Link>
 
@@ -160,11 +222,11 @@ export default async function Home() {
                         <div className="flex items-center gap-4 text-sm text-muted-foreground">
                           <span className="flex items-center gap-1 hover:text-primary cursor-pointer transition-colors">
                             <Heart className="w-4 h-4" />
-                            <span>Like</span>
+                            <span>{post._count?.likes || 0} likes</span>
                           </span>
                           <span className="flex items-center gap-1 hover:text-primary cursor-pointer transition-colors">
                             <MessageCircle className="w-4 h-4" />
-                            <span>Comment</span>
+                            <span>{post._count?.comments || 0} comments</span>
                           </span>
                         </div>
                       </div>

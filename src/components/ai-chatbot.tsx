@@ -1,6 +1,6 @@
 "use client";
 
-import { CopilotPopup } from "@copilotkit/react-ui";
+import { CopilotSidebar } from "@copilotkit/react-ui";
 import { useCopilotAction } from "@copilotkit/react-core";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
@@ -181,8 +181,172 @@ export function AIChatbot() {
     },
   });
 
+  // Action to toggle like on a post
+  useCopilotAction({
+    name: "toggleLike",
+    description: "Toggle like (or unlike) for a post by ID",
+    parameters: [
+      {
+        name: "postId",
+        type: "string",
+        description: "The ID of the blog post to like/unlike",
+        required: true,
+      },
+    ],
+    handler: async ({ postId }) => {
+      try {
+        const response = await fetch(`/api/posts/${postId}/like`, {
+          method: "POST",
+        });
+
+        if (response.ok) {
+          const json = await response.json();
+          return json.message || (json.liked ? "Post liked" : "Post unliked");
+        } else {
+          const error = await response.json();
+          return `Failed to toggle like: ${error.message || "Unknown error"}`;
+        }
+      } catch (error) {
+        return `Error toggling like: ${error}`;
+      }
+    },
+  });
+
+  // Action to get like count for a post
+  useCopilotAction({
+    name: "getLikeCount",
+    description:
+      "Get the like count and whether the current user liked the post",
+    parameters: [
+      {
+        name: "postId",
+        type: "string",
+        description: "The ID of the blog post",
+        required: true,
+      },
+    ],
+    handler: async ({ postId }) => {
+      try {
+        const response = await fetch(`/api/posts/${postId}/like`);
+        if (response.ok) {
+          const json = await response.json();
+          return (
+            `This post has ${json.likeCount} likes.` +
+            (json.isLikedByCurrentUser ? " You liked it." : "")
+          );
+        } else {
+          return "Failed to fetch like count.";
+        }
+      } catch (error) {
+        return `Error fetching like count: ${error}`;
+      }
+    },
+  });
+
+  // Action to fetch comments for a post
+  useCopilotAction({
+    name: "getComments",
+    description: "Get comments for a specific post",
+    parameters: [
+      {
+        name: "postId",
+        type: "string",
+        description: "The ID of the blog post",
+        required: true,
+      },
+    ],
+    handler: async ({ postId }) => {
+      try {
+        const response = await fetch(`/api/posts/${postId}/comments`);
+        if (response.ok) {
+          const { comments } = await response.json();
+          if (!comments || comments.length === 0) return "No comments found.";
+          return comments
+            .map(
+              (c: any, i: number) =>
+                `${i + 1}. ${c.user.name || c.user.email}: ${c.content}`
+            )
+            .join("\n");
+        } else {
+          return "Failed to fetch comments.";
+        }
+      } catch (error) {
+        return `Error fetching comments: ${error}`;
+      }
+    },
+  });
+
+  // Action to create a comment
+  useCopilotAction({
+    name: "createComment",
+    description: "Create a comment on a post",
+    parameters: [
+      {
+        name: "postId",
+        type: "string",
+        required: true,
+        description: "Post ID",
+      },
+      {
+        name: "content",
+        type: "string",
+        required: true,
+        description: "Comment content",
+      },
+    ],
+    handler: async ({ postId, content }) => {
+      try {
+        const response = await fetch(`/api/posts/${postId}/comments`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ content }),
+        });
+        if (response.ok) {
+          const { comment } = await response.json();
+          return `Comment created: ${comment.content}`;
+        } else {
+          const error = await response.json();
+          return `Failed to create comment: ${
+            error.message || "Unknown error"
+          }`;
+        }
+      } catch (error) {
+        return `Error creating comment: ${error}`;
+      }
+    },
+  });
+
+  // Action to register a new user
+  useCopilotAction({
+    name: "registerUser",
+    description: "Register a new user with name, email, and password",
+    parameters: [
+      { name: "name", type: "string", required: true },
+      { name: "email", type: "string", required: true },
+      { name: "password", type: "string", required: true },
+    ],
+    handler: async ({ name, email, password }) => {
+      try {
+        const response = await fetch(`/api/auth/register`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ name, email, password }),
+        });
+        if (response.ok) {
+          const json = await response.json();
+          return json.message || "User registered successfully.";
+        } else {
+          const error = await response.json();
+          return `Failed to register user: ${error.error || "Unknown error"}`;
+        }
+      } catch (error) {
+        return `Error registering user: ${error}`;
+      }
+    },
+  });
+
   return (
-    <CopilotPopup
+    <CopilotSidebar
       instructions="You are an AI assistant for a blog application. You can help users create, read, update, and delete blog posts. You have access to the following actions:
       
       1. **createBlogPost** - Create a new blog post with title and content

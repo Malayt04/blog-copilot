@@ -9,18 +9,25 @@ import Link from "next/link";
 import dynamic from "next/dynamic";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
+import { Post } from "@prisma/client";
 
 // Dynamically import the markdown editor to avoid SSR issues
 const MDEditor = dynamic(() => import("@uiw/react-md-editor"), {
   ssr: false,
 });
 
-export function CreatePostForm() {
-  const [title, setTitle] = useState("");
-  const [content, setContent] = useState("");
+interface CreatePostFormProps {
+  initialPost?: Post;  // For editing existing posts
+}
+
+export function CreatePostForm({ initialPost }: CreatePostFormProps = {}) {
+  const [title, setTitle] = useState(initialPost?.title || "");
+  const [content, setContent] = useState(initialPost?.content || "");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [previewMode, setPreviewMode] = useState(false);
   const router = useRouter();
+
+  const isEditing = !!initialPost;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -33,27 +40,43 @@ export function CreatePostForm() {
     setIsSubmitting(true);
 
     try {
-      const response = await fetch("/api/posts", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          title: title.trim(),
-          content: content.trim(),
-        }),
-      });
+      let response;
+      if (isEditing) {
+        // Update existing post
+        response = await fetch(`/api/posts/${initialPost?.id}`, {
+          method: "PUT",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            title: title.trim(),
+            content: content.trim(),
+          }),
+        });
+      } else {
+        // Create new post
+        response = await fetch("/api/posts", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            title: title.trim(),
+            content: content.trim(),
+          }),
+        });
+      }
 
       if (response.ok) {
         const { post } = await response.json();
         router.push(`/posts/${post.id}`);
       } else {
         const error = await response.json();
-        alert(error.message || "Failed to create post");
+        alert(error.message || (isEditing ? "Failed to update post" : "Failed to create post"));
       }
     } catch (error) {
-      console.error("Error creating post:", error);
-      alert("Failed to create post");
+      console.error(isEditing ? "Error updating post:" : "Error creating post:", error);
+      alert(isEditing ? "Failed to update post" : "Failed to create post");
     } finally {
       setIsSubmitting(false);
     }
@@ -66,7 +89,7 @@ export function CreatePostForm() {
         <div className="container mx-auto px-4">
           <div className="flex h-16 items-center justify-between">
             <div className="flex items-center gap-4">
-              <Link href="/">
+              <Link href={isEditing ? `/posts/${initialPost?.id}` : "/"}>
                 <Button
                   variant="ghost"
                   size="sm"
@@ -77,7 +100,7 @@ export function CreatePostForm() {
                 </Button>
               </Link>
               <h1 className="text-xl font-semibold bg-gradient-to-r from-foreground to-foreground/70 bg-clip-text text-transparent">
-                Create New Story
+                {isEditing ? "Edit Story" : "Create New Story"}
               </h1>
             </div>
             <div className="flex items-center gap-4">
@@ -161,7 +184,7 @@ export function CreatePostForm() {
               </p>
             </div>
             <div className="flex gap-3">
-              <Link href="/">
+              <Link href={isEditing ? `/posts/${initialPost?.id}` : "/"}>
                 <Button
                   type="button"
                   variant="outline"
@@ -177,7 +200,7 @@ export function CreatePostForm() {
                 className="bg-primary text-primary-foreground hover:bg-primary/90 rounded-full px-8 py-2 font-medium transition-all duration-200 shadow-lg hover:shadow-xl"
               >
                 <Save className="h-4 w-4 mr-2" />
-                {isSubmitting ? "Publishing..." : "Publish Story"}
+                {isSubmitting ? (isEditing ? "Updating..." : "Publishing...") : (isEditing ? "Update Story" : "Publish Story")}
               </Button>
             </div>
           </div>
